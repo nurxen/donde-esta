@@ -4,8 +4,7 @@
 //  la app web (Configuración del proyecto → Tus apps → Config).
 //  Estos datos NO son secretos: es normal que estén en GitHub.
 // ─────────────────────────────────────────────────────────────
-
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyDQuFPVGtca06zI69x7gG25EW_Mjx6tmdw",
   authDomain: "donde-esta-e35a1.firebaseapp.com",
   projectId: "donde-esta-e35a1",
@@ -13,7 +12,6 @@ const firebaseConfig = {
   messagingSenderId: "317195706546",
   appId: "1:317195706546:web:c97e56c5a241a055cba9ab"
 };
-
 
 // Lugares que se crean la primera vez que se da de alta la casa.
 // Después se pueden renombrar, añadir o borrar desde la app.
