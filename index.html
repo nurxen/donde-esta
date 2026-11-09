@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>¿Dónde está?</title>
+  <meta name="description" content="Dónde tenemos guardadas las cosas de casa">
+  <meta name="theme-color" content="#C8553D">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Dónde está">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <button id="backBtn" class="icon-btn" aria-label="Volver" hidden>‹</button>
+      <h1 id="title">¿Dónde está?</h1>
+      <span id="syncDot" class="sync-dot" title="Sincronización"></span>
+    </header>
+    <main id="view"><div class="loading">Cargando…</div></main>
+    <nav id="tabbar" hidden>
+      <a href="#/" data-tab="home"><span class="ti">🔎</span><span>Buscar</span></a>
+      <a href="#/lugares" data-tab="lugares"><span class="ti">🏠</span><span>Lugares</span></a>
+      <a href="#/nuevo" data-tab="nuevo" class="tab-add" aria-label="Guardar algo"><span class="ti">＋</span></a>
+      <a href="#/listas" data-tab="listas"><span class="ti">📋</span><span>Listas</span></a>
+      <a href="#/ajustes" data-tab="ajustes"><span class="ti">⚙️</span><span>Ajustes</span></a>
+    </nav>
+  </div>
+  <div id="sheet" hidden></div>
+  <div id="toast" hidden></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

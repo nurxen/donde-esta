@@ -1,0 +1,19 @@
+rules_version = '2';
+// Reglas para "¿Dónde está?"
+// - Cada casa vive en /households/{id}, donde {id} es un hash del código familiar.
+// - Nadie puede listar las casas: solo entra quien conoce el código.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /households/{hid} {
+      allow get, create, update: if request.auth != null && hid.size() == 64;
+      allow list, delete: if false;
+
+      match /{col}/{docId} {
+        allow read, write: if request.auth != null && col in ['places', 'items', 'photos'];
+      }
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
