@@ -1,6 +1,6 @@
 // Service worker: la app funciona sin conexión. Los datos los gestiona Firebase (con su propia caché).
-const CACHE = 'donde-esta-v1';
-const SHELL = ['./', 'index.html', 'css/styles.css', 'js/app.js', 'js/store.js', 'js/config.js',
+const CACHE = 'donde-esta-v2';
+const SHELL = ['./', 'index.html', 'css/styles.css', 'js/app.js', 'js/store.js', 'js/config.js', 'js/tutorial.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

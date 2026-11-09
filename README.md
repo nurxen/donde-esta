@@ -9,6 +9,7 @@ Funciona en iPhone y Android como una app normal (icono en la pantalla de inicio
 
 ## Qué hace
 
+- **Tutorial de bienvenida** la primera vez que se entra. Se puede volver a ver con el botón **?** de la pantalla de inicio o desde *Ajustes*.
 - **Buscar** escribiendo o por voz 🎤. Entiende frases como «¿dónde están los pasaportes?», sin importar tildes ni plurales.
 - **Guardar algo** con el botón ＋: nombre, foto opcional y sitio. El sitio se elige paso a paso
   (**Planta → Habitación → Mueble → Cajón/estante/caja**). Si el mueble o el cajón no existe, se crea en ese momento.
@@ -108,6 +109,7 @@ index.html            Página principal
 css/styles.css        Estilos (modo claro y oscuro)
 js/app.js             La aplicación
 js/store.js           Conexión con Firebase / modo demo
+js/tutorial.js        Tutorial de bienvenida
 js/config.js          ← Aquí va tu configuración de Firebase y los lugares iniciales
 sw.js                 Funcionamiento sin conexión
 manifest.webmanifest  Para instalarla como app

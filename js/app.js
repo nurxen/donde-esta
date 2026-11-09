@@ -1,7 +1,8 @@
 import { DEFAULT_PLACES, DEFAULT_CATEGORIES } from './config.js';
 import { isConfigured, householdIdFromCode, createFirebaseStore, createLocalStore } from './store.js';
+import { openTutorial, tutorialSeen } from './tutorial.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const SESSION_KEY = 'donde-esta-session';
 const RECENT_KEY = 'donde-esta-recent-places';
 
@@ -11,7 +12,7 @@ const S = {
   places: {}, items: {}, household: {},
   loaded: { places: false, items: false },
   q: '', prefillName: '', form: null, picker: null,
-  photoCache: {}, installEvt: null, nav: 0, listTab: 'prestado', listCat: ''
+  photoCache: {}, installEvt: null, listTab: 'prestado', listCat: ''
 };
 
 const $ = sel => document.querySelector(sel);
@@ -223,8 +224,29 @@ function parseHash() {
 const ROOT_TABS = { '': 'home', lugares: 'lugares', nuevo: 'nuevo', listas: 'listas', ajustes: 'ajustes' };
 
 function setTitle(t) { $('#title').textContent = t; }
+
+// Pila de navegación propia: «‹» vuelve a la pantalla anterior de la app, o a la pantalla «padre» si no hay.
+const navStack = [];
+let replacing = false;
+function go(hash, replace = false) {
+  if (location.hash === hash) return route();
+  if (replace) { replacing = true; location.replace(hash); } else location.hash = hash;
+}
+function onHashChange() {
+  const h = location.hash || '#/';
+  if (replacing) { replacing = false; navStack[Math.max(0, navStack.length - 1)] = h; }
+  else if (navStack.length > 1 && navStack[navStack.length - 2] === h) navStack.pop();
+  else navStack.push(h);
+  route();
+}
+function logicalParent() {
+  const { parts } = parseHash();
+  if (parts[0] === 'lugar') { const p = S.places[parts[1]]; return p?.parentId ? '#/lugar/' + p.parentId : '#/lugares'; }
+  if (parts[0] === 'editar') return '#/cosa/' + parts[1];
+  return '#/';
+}
 function goBack() {
-  if (S.nav > 0) { S.nav -= 2; history.back(); } else location.hash = '#/';
+  if (navStack.length > 1) history.back(); else go(logicalParent(), true);
 }
 
 function route() {
@@ -238,6 +260,7 @@ function route() {
   document.querySelectorAll('#tabbar a').forEach(a => a.classList.toggle('active', a.dataset.tab === (tab || (root === 'lugar' ? 'lugares' : ''))));
   $('#backBtn').hidden = !!tab && root !== 'nuevo';
   if (root === 'nuevo') $('#backBtn').hidden = false;
+  $('#helpBtn').hidden = root !== '';
   S.current = { root, parts, params };
   window.scrollTo(0, 0);
   switch (root) {
@@ -265,7 +288,7 @@ function refresh() {
 
 // ───────────────────────── Vistas: login ─────────────────────────
 function renderLogin() {
-  $('#tabbar').hidden = true; $('#backBtn').hidden = true; setTitle('¿Dónde está?');
+  $('#tabbar').hidden = true; $('#backBtn').hidden = true; $('#helpBtn').hidden = true; setTitle('¿Dónde está?');
   const cfg = isConfigured();
   view.innerHTML = `
   <div class="login">
@@ -305,7 +328,8 @@ function renderLogin() {
       await store.addMember(name);
       S.session = { hid, me: name, mode, code };
       localStorage.setItem(SESSION_KEY, JSON.stringify(S.session));
-      S.store = store; startSync(); location.hash = '#/'; route();
+      S.store = store; startSync(); go('#/', true);
+      if (!tutorialSeen()) openTutorial();
       toast(`¡Hola, ${esc(name)}!`);
     } catch (err) {
       fail(err); btn.disabled = false; btn.textContent = cfg ? 'Entrar' : 'Probar en modo demo';
@@ -391,7 +415,9 @@ function renderResults() {
   let html = '';
   if (items.length) {
     const top = items[0];
-    if (top.status !== 'tirado') {
+    if (top.status === 'tirado') {
+      html += `<a class="card warn" href="#/cosa/${top.id}"><b>🗑️ ${esc(top.name)}</b><br>Lo marcasteis como tirado o donado ${esc(timeAgo(top.discardedAt))}. Ya no está en casa.</a>`;
+    } else {
       html += `<a class="card answer" href="#/cosa/${top.id}">
         <div class="answer-q">${esc(top.name)}</div>
         <div class="answer-where">${top.status === 'prestado' ? `🤝 Prestado a <b>${esc(top.lentTo || '¿?')}</b><br><small>Su sitio:</small> ` : '📍 '}${crumbsHtml(top.placeId, { links: false, withFloor: false })}</div>
@@ -419,7 +445,7 @@ function dashboardHtml() {
     html += `<div class="card welcome">
       <h3>👋 ¡Empezamos!</h3>
       <p>Cada vez que guardéis algo importante, apuntadlo con el botón <b>＋</b>: pasaportes, tarjeta sanitaria, garantías, cosas del trastero…</p>
-      <a class="btn primary" href="#/nuevo">＋ Guardar la primera cosa</a>
+      <div class="actions"><a class="btn primary" href="#/nuevo">＋ Guardar la primera cosa</a><button class="btn" data-act="tutorial">📖 Cómo funciona</button></div>
     </div>`;
   }
   const expiring = act.filter(i => i.expires && daysUntil(i.expires) <= 60).sort((a, b) => a.expires.localeCompare(b.expires));
@@ -517,7 +543,7 @@ function renderItem(id) {
         : `<button class="btn" data-act="discardItem" data-id="${id}">🗑️ Lo hemos tirado</button>`}
     </div>
     ${it.status !== 'tirado' && it.placeId ? `<a class="btn ghost wide" href="#/nuevo?lugar=${it.placeId}">＋ Guardar otra cosa en el mismo sitio</a>` : ''}
-    <p class="meta">Apuntado por <b>${esc(it.createdBy || '¿?')}</b> ${esc(timeAgo(it.createdAt))}${it.updatedBy && it.updatedAt !== it.createdAt ? ` · Último cambio: ${esc(it.updatedBy)} ${esc(timeAgo(it.updatedAt))}` : ''}</p>
+    <p class="meta">Apuntado por <b>${esc(it.createdBy || '¿?')}</b> ${esc(timeAgo(it.createdAt))}${it.updatedBy && (it.updatedAt || 0) - (it.createdAt || 0) > 5000 ? ` · Último cambio: ${esc(it.updatedBy)} ${esc(timeAgo(it.updatedAt))}` : ''}</p>
     ${(it.history || []).length ? `<details class="section-d"><summary>Historial (${it.history.length})</summary><ul class="history">${it.history.map(h =>
       `<li><span>${esc(h.text)}</span><small>${esc(h.by)} · ${esc(timeAgo(h.at))}</small></li>`).join('')}</ul></details>` : ''}
     <button class="btn ghost danger wide" data-act="deleteItem" data-id="${id}">Borrar de la app</button>`;
@@ -612,6 +638,7 @@ function saveForm() {
   if (!name) return toast('Escribe qué es');
   if (!f.placeId || !S.places[f.placeId]) { toast('Elige dónde lo guardas'); return openPicker({ start: null, onPick: pid => { f.placeId = pid; updatePlaceButton(); } }); }
   const isNew = !f.id;
+  const ts = now();
   const id = f.id || S.store.newId('items');
   const old = S.items[id];
   let photoId = f.photoId;
@@ -624,10 +651,10 @@ function saveForm() {
   }
   const data = {
     name, placeId: f.placeId, category: f.category.trim(), notes: f.notes.trim(), expires: f.expires || '',
-    thumb: f.removePhoto ? null : (f.thumb || null), photoId: photoId || null, updatedAt: now(), updatedBy: me()
+    thumb: f.removePhoto ? null : (f.thumb || null), photoId: photoId || null, updatedAt: ts, updatedBy: me()
   };
   if (isNew) {
-    Object.assign(data, { status: 'guardado', createdAt: now(), createdBy: me(), history: [historyEntry('Guardado en ' + pathText(f.placeId))] });
+    Object.assign(data, { status: 'guardado', createdAt: ts, createdBy: me(), history: [historyEntry('Guardado en ' + pathText(f.placeId))] });
   } else if (old.placeId !== f.placeId) {
     data.history = withHistory(old, `Movido de ${pathText(old.placeId)} a ${pathText(f.placeId)}`);
   }
@@ -636,7 +663,7 @@ function saveForm() {
   pushRecentPlace(f.placeId);
   S.form = null;
   toast(`✅ Guardado en <b>${esc(pathText(f.placeId))}</b>`);
-  location.replace('#/cosa/' + id);
+  go('#/cosa/' + id, true);
 }
 
 // ───────────────────────── Selector de sitio (hoja) ─────────────────────────
@@ -679,7 +706,8 @@ function renderPickerBody() {
       html += `<h4>Elige planta</h4>`;
     } else html += `<h4>Dentro de ${esc(cur.name)}</h4>`;
     const kids = childrenOf(P.cur).filter(k => !excluded.has(k.id));
-    html += `<div class="list">${kids.map(k => `<button class="row" data-act="pickerGo" data-id="${k.id}">
+    if (cur && !kids.length) html += `<p class="muted small pad0">Aún no hay nada dentro. Puedes guardarlo aquí mismo o crear un sitio más concreto.</p>`;
+    if (kids.length) html += `<div class="list">${kids.map(k => `<button class="row" data-act="pickerGo" data-id="${k.id}">
       <span class="thumb ph">${placeIcon(k)}</span><span class="row-main"><span class="row-title">${esc(k.name)}</span><span class="row-sub">${esc(placeSummary(k.id))}</span></span><span class="chev">›</span></button>`).join('')}</div>`;
     const ct = CHILD_TYPE[cur?.type || 'root'];
     html += P.adding
@@ -746,6 +774,7 @@ function renderSettings() {
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   view.innerHTML = `
   <div class="stack">
+    <button class="btn wide tut-open" data-act="tutorial">📖 Ver el tutorial de cómo funciona</button>
     <section class="card">
       <h3>👤 Tú</h3>
       <form id="meForm" class="row-form"><input name="me" value="${esc(me())}" maxlength="30" required><button class="btn">Cambiar</button></form>
@@ -862,7 +891,7 @@ const ACTIONS = {
     r.onend = () => b?.classList.remove('rec');
     try { r.start(); } catch { b?.classList.remove('rec'); }
   },
-  saveFromSearch() { S.prefillName = S.q.trim().replace(/^¿?\s*d[oó]nde\s+(est[aá]n?|he\s+guardado)\s+(el|la|los|las|mi|mis)?\s*/i, '').replace(/\?$/, ''); S.prefillName = S.prefillName.charAt(0).toUpperCase() + S.prefillName.slice(1); S.form = null; location.hash = '#/nuevo'; },
+  saveFromSearch() { S.prefillName = S.q.trim().replace(/^¿?\s*d[oó]nde\s+(est[aá]n?|he\s+guardado)\s+(el|la|los|las|mi|mis)?\s*/i, '').replace(/\?$/, ''); S.prefillName = S.prefillName.charAt(0).toUpperCase() + S.prefillName.slice(1); S.form = null; S.q = ''; go('#/nuevo'); },
   pickPhoto() { $('#photoInput')?.click(); },
   removePhoto() { Object.assign(S.form, { thumb: null, newFull: null, removePhoto: true }); renderForm(S.form.id, parseHash().params); },
   pickPlace() { openPicker({ start: S.form.placeId, onPick: pid => { S.form.placeId = pid; updatePlaceButton(); } }); },
@@ -881,7 +910,7 @@ const ACTIONS = {
   },
   moveItem(el) {
     const it = S.items[el.dataset.id];
-    openPicker({ start: it.placeId, title: '¿Dónde está ahora?', onPick: pid => {
+    openPicker({ start: S.places[it.placeId]?.parentId || it.placeId, title: '¿Dónde está ahora?', onPick: pid => {
       if (!pid || pid === it.placeId) return;
       updateItem(it.id, { placeId: pid }, `Movido de ${pathText(it.placeId)} a ${pathText(pid)}`);
       toast(`📦 Ahora está en <b>${esc(pathText(pid))}</b>`); renderItem(it.id);
@@ -908,7 +937,7 @@ const ACTIONS = {
     if (!confirm(`¿Borrar «${it.name}» de la app? No se puede deshacer.\n\n(Si lo habéis tirado, mejor usa «Lo hemos tirado».)`)) return;
     if (it.photoId) write(S.store.del('photos', it.photoId));
     delete S.items[it.id]; write(S.store.del('items', it.id));
-    toast('Borrado'); location.replace('#/');
+    toast('Borrado'); go('#/', true);
   },
   zoom() { const img = $('#heroImg'); if (img) img.classList.toggle('zoomed'); },
   addChild(el) {
@@ -935,13 +964,14 @@ const ACTIONS = {
   },
   deletePlace(el) {
     const p = S.places[el.dataset.id];
-    const kids = childrenOf(p.id).length; const n = Object.values(S.items).filter(i => descendantIds(p.id).includes(i.placeId)).length;
+    const kids = childrenOf(p.id).length; const n = activeItems().filter(i => descendantIds(p.id).includes(i.placeId)).length;
     if (kids || n) return toast(`No se puede borrar: dentro hay ${kids ? kids + ' sitio(s)' : ''}${kids && n ? ' y ' : ''}${n ? n + ' cosa(s)' : ''}. Muévelos o bórralos antes.`, 4500);
     if (!confirm(`¿Borrar «${p.name}»?`)) return;
     const parent = p.parentId; delete S.places[p.id]; write(S.store.del('places', p.id));
-    location.replace(parent ? '#/lugar/' + parent : '#/lugares');
+    go(parent ? '#/lugar/' + parent : '#/lugares', true);
   },
   qrPlace(el) { showQr(el.dataset.id); },
+  tutorial() { openTutorial(); },
   printQr() { document.body.classList.add('print-qr'); window.print(); setTimeout(() => document.body.classList.remove('print-qr'), 500); },
   listCat(el) { S.listCat = el.dataset.cat; renderLists(); },
   showCode(el) { const c = $('#codeTxt'); const shown = c.dataset.shown === '1'; c.textContent = shown ? '••••••••' : S.session.code; c.dataset.shown = shown ? '0' : '1'; el.textContent = shown ? 'Mostrar' : 'Ocultar'; },
@@ -969,12 +999,17 @@ document.addEventListener('click', e => {
   try { const r = ACTIONS[el.dataset.act](el, e); if (r?.catch) r.catch(fail); } catch (err) { fail(err); }
 });
 $('#backBtn').addEventListener('click', goBack);
-window.addEventListener('hashchange', () => { S.nav++; route(); });
+document.querySelector('#tabbar a[data-tab=home]').addEventListener('click', e => {
+  if (S.current?.root === '' && S.q) { e.preventDefault(); S.q = ''; const q = $('#q'); if (q) q.value = ''; renderResults(); }
+});
+$('#helpBtn').addEventListener('click', () => openTutorial());
+window.addEventListener('hashchange', onHashChange);
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
 
 // ───────────────────────── Arranque ─────────────────────────
 async function boot() {
+  navStack.push(location.hash || '#/');
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(console.warn);
   }

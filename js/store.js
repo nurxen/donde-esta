@@ -25,6 +25,8 @@ export async function createFirebaseStore(hid, onStatus = () => {}) {
   ]);
   const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebaseConfig);
   const auth = authMod.getAuth(app);
+  const emu = localStorage.getItem('donde-esta-emulator'); // solo para pruebas locales
+  if (emu && !auth.emulatorConfig) authMod.connectAuthEmulator(auth, `http://${emu}:9099`, { disableWarnings: true });
   const user = await new Promise(res => { const un = authMod.onAuthStateChanged(auth, u => { un(); res(u); }); });
   if (!user) await authMod.signInAnonymously(auth);
 
@@ -34,6 +36,7 @@ export async function createFirebaseStore(hid, onStatus = () => {}) {
       localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() })
     });
   } catch (e) { db = fs.getFirestore(app); }
+  if (emu) { try { fs.connectFirestoreEmulator(db, emu, 8080); } catch {} }
 
   const hRef = fs.doc(db, 'households', hid);
   const col = n => fs.collection(db, 'households', hid, n);
